@@ -79,6 +79,18 @@ async function launchWithRetry(
   });
 }
 
+export async function extractSessionReplayUrl(browser: any): Promise<string | undefined> {
+  try {
+    if (typeof browser?.recording === "function") {
+      const rec = await browser.recording();
+      return rec?.url ?? rec?.recordingUrl ?? undefined;
+    }
+  } catch (recErr) {
+    console.warn("[PriceScope] Session replay recording extraction skipped:", recErr);
+  }
+  return undefined;
+}
+
 async function scanOne(
   solari: Solari,
   job: ScanJob
@@ -99,12 +111,7 @@ async function scanOne(
     await new Promise((r) => setTimeout(r, 1500));
 
     const pricing = await extractPricing(page, job.product);
-
-    let replayUrl: string | undefined;
-    try {
-      const rec = await browser.recording?.();
-      replayUrl = rec?.url;
-    } catch (_) {}
+    const replayUrl = await extractSessionReplayUrl(browser);
 
     return {
       product: job.product,
