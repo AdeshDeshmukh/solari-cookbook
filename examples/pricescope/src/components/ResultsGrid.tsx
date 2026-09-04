@@ -1,6 +1,7 @@
 "use client";
 
 import { ScanResult, GeoCode, GEO_FLAGS } from "@/lib/types";
+import { exportMatrixToCSV } from "@/lib/export";
 
 interface ScanJob {
   product: string;
@@ -183,27 +184,6 @@ function DiscrepancyTable({
   geos: GeoCode[];
   results: Map<string, ScanResult>;
 }) {
-  const exportCSV = () => {
-    const headers = ["Product", ...geos.map((g) => g.toUpperCase())];
-    const rows = products.map((p) => [
-      p,
-      ...geos.map((g) => {
-        const r = results.get(`${p}-${g}`);
-        return r?.tiers?.[0]?.price ?? r?.price ?? "N/A";
-      }),
-    ]);
-
-    const csv = [headers, ...rows].map((r) => r.join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.setAttribute("download", `pricescope-report-${Date.now()}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
   return (
     <div className="mt-8 bg-slate-900/90 rounded-2xl border border-slate-800 p-6 shadow-xl">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
@@ -217,7 +197,7 @@ function DiscrepancyTable({
         </div>
         <button
           type="button"
-          onClick={exportCSV}
+          onClick={() => exportMatrixToCSV(products, geos, results)}
           className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl px-4 py-2 text-xs font-semibold transition-colors flex items-center gap-2 self-start sm:self-auto"
         >
           <span>📥</span>
