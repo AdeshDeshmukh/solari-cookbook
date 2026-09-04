@@ -86,28 +86,60 @@ export async function extractPricing(page: any, productHint: string): Promise<Ex
       tiers.push({ name: "Pro", price: proPrice, billingPeriod: "monthly", features: ["Unlimited message history", "Canvas"] });
       tiers.push({ name: "Business+", price: "$12.50/mo", billingPeriod: "monthly", features: ["SAML SSO", "99.99% uptime"] });
     } else {
-      // Generic DOM extraction
+      // Strategy 1: Modern CSS Grid & Flexbox Pricing Card Containers
       const cards = document.querySelectorAll(
-        "[class*='plan'], [class*='tier'], [class*='pricing-card'], [class*='price-card'], [data-testid*='plan']"
+        "[class*='plan'], [class*='tier'], [class*='pricing-card'], [class*='price-card'], [class*='PricingCard'], [data-testid*='plan'], [data-testid*='pricing-card'], article, .card"
       );
 
       cards.forEach((card) => {
-        const nameEl = card.querySelector("h2, h3, h4, [class*='plan-name'], [class*='tier-name'], [class*='title']");
-        const priceEl = card.querySelector("[class*='price']:not([class*='price-desc']), [data-testid*='price']");
-        const periodEl = card.querySelector("[class*='period'], [class*='billing'], [class*='term']");
+        const nameEl = card.querySelector(
+          "h2, h3, h4, [class*='plan-name'], [class*='tier-name'], [class*='title'], [class*='header']"
+        );
+        const priceEl = card.querySelector(
+          "[class*='price']:not([class*='price-desc']), [data-testid*='price'], [class*='amount'], strong"
+        );
+        const periodEl = card.querySelector(
+          "[class*='period'], [class*='billing'], [class*='term'], [class*='frequency']"
+        );
+        const featureEls = card.querySelectorAll("ul li, [class*='feature-item']");
+        
         const name = nameEl?.textContent?.trim() || "";
         const price = priceEl?.textContent?.trim() || "";
+        const billingPeriod = periodEl?.textContent?.trim() || "monthly";
+        const features: string[] = [];
+        featureEls.forEach((f) => {
+          const text = f.textContent?.trim();
+          if (text && text.length < 80) features.push(text);
+        });
 
-        if (name || price) {
+        if (name && price && !name.toLowerCase().includes("faq")) {
           tiers.push({
-            name: name || "Plan",
-            price: price || "Custom",
-            billingPeriod: periodEl?.textContent?.trim() || "monthly",
-            features: [],
+            name,
+            price,
+            billingPeriod,
+            features: features.slice(0, 4),
           });
         }
       });
 
+      // Strategy 2: Semantic Table Structure (Traditional Pricing Comparison Grids)
+      if (tiers.length === 0) {
+        const tableHeaders = document.querySelectorAll("table th, table thead td");
+        tableHeaders.forEach((th) => {
+          const text = th.textContent?.trim() || "";
+          const priceMatch = text.match(/([\$£€¥₹]\s*[\d,]+|\d+\s*(USD|EUR|GBP|JPY|INR|₹|\$|€|£|¥))/i);
+          if (priceMatch) {
+            tiers.push({
+              name: text.split("\n")[0].trim() || "Tier",
+              price: priceMatch[0],
+              billingPeriod: "monthly",
+              features: [],
+            });
+          }
+        });
+      }
+
+      // Strategy 3: Global Heuristic Regex Parsing across document body
       if (tiers.length === 0) {
         const priceRegex = /([\$£€¥₹]\s*[\d,]+|\d+\s*(USD|EUR|GBP|JPY|INR|₹|\$|€|£|¥))(\s*\/\s*(mo|month|user|yr|year|seat))?/gi;
         const matches = bodyText.match(priceRegex) || [];
@@ -115,7 +147,7 @@ export async function extractPricing(page: any, productHint: string): Promise<Ex
 
         uniqueMatches.slice(0, 3).forEach((match, idx) => {
           tiers.push({
-            name: idx === 0 ? "Starter" : idx === 1 ? "Pro" : "Business",
+            name: idx === 0 ? "Starter" : idx === 1 ? "Pro" : "Enterprise",
             price: match,
             billingPeriod: "monthly",
             features: [],
@@ -124,7 +156,7 @@ export async function extractPricing(page: any, productHint: string): Promise<Ex
       }
     }
 
-    // Identify primary paid plan
+    // Identify primary paid tier
     const paidTier =
       tiers.find(
         (t) =>
