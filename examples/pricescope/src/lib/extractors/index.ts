@@ -13,6 +13,45 @@ export interface ExtractedPricing {
   primaryPlanName: string;
 }
 
+export const CURRENCY_SYMBOLS: Record<string, string> = {
+  USD: "$",
+  EUR: "€",
+  GBP: "£",
+  JPY: "¥",
+  INR: "₹",
+  CAD: "CA$",
+  AUD: "A$",
+  SGD: "S$",
+  CHF: "CHF",
+};
+
+export const REGIONAL_CURRENCY_PATTERNS: Array<{ code: string; regex: RegExp }> = [
+  { code: "INR", regex: /(₹|INR|Rs\.?|Rupees)/i },
+  { code: "GBP", regex: /(£|GBP|Pounds)/i },
+  { code: "EUR", regex: /(€|EUR|Euros)/i },
+  { code: "JPY", regex: /(¥|JPY|Yen)/i },
+  { code: "CAD", regex: /(CAD|CA\$)/i },
+  { code: "AUD", regex: /(AUD|A\$)/i },
+  { code: "USD", regex: /(\$|USD)/i },
+];
+
+export function detectCurrencyFromText(text: string): string {
+  for (const { code, regex } of REGIONAL_CURRENCY_PATTERNS) {
+    if (regex.test(text)) return code;
+  }
+  return "USD";
+}
+
+export function normalizePriceString(raw: string, defaultCurrency = "USD"): string {
+  if (!raw || raw.toLowerCase().includes("contact") || raw.toLowerCase().includes("custom")) {
+    return "Custom";
+  }
+  if (raw.toLowerCase().includes("free") || raw.match(/^[¥$€£₹]\s*0(\.00)?(\/mo)?$/)) {
+    return "$0";
+  }
+  return raw.replace(/\s+/g, " ").trim();
+}
+
 export const PRODUCT_URLS: Record<string, string> = {
   notion: "https://www.notion.so/pricing",
   linear: "https://linear.app/pricing",
@@ -43,9 +82,9 @@ export async function extractPricing(page: any, productHint: string): Promise<Ex
   const result: ExtractedPricing = await page.evaluate((key: string) => {
     const bodyText = document.body.innerText || "";
 
-    // Determine Currency
+    // Determine Currency using regional symbol priority
     let currency = "USD";
-    if (bodyText.includes("₹") || bodyText.includes("INR")) currency = "INR";
+    if (bodyText.includes("₹") || bodyText.includes("INR") || /Rs\.?/i.test(bodyText)) currency = "INR";
     else if (bodyText.includes("£") || bodyText.includes("GBP")) currency = "GBP";
     else if (bodyText.includes("€") || bodyText.includes("EUR")) currency = "EUR";
     else if (bodyText.includes("¥") || bodyText.includes("JPY")) currency = "JPY";
