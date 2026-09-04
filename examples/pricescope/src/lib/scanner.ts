@@ -117,25 +117,39 @@ async function scanOne(
   }
 }
 
-async function runPool<T>(
+export function calculateBackoffDelay(attempt: number, baseMs = 1500): number {
+  const exponential = Math.pow(2, attempt) * baseMs;
+  const jitter = Math.random() * 500;
+  return exponential + jitter;
+}
+
+export async function runPool<T>(
   tasks: (() => Promise<T>)[],
   poolSize: number,
   onResult: (result: T) => void
 ): Promise<void> {
   let index = 0;
 
-  async function worker() {
+  async function worker(workerId: number) {
     while (index < tasks.length) {
       const taskIndex = index++;
-      const result = await tasks[taskIndex]();
-      onResult(result);
-      await new Promise((r) => setTimeout(r, 1000));
+      try {
+        const result = await tasks[taskIndex]();
+        onResult(result);
+      } catch (err) {
+        console.error(`[Worker ${workerId}] Task ${taskIndex} failed:`, err);
+      }
+      // Pacing interval between worker launches
+      await new Promise((r) => setTimeout(r, 800));
     }
   }
 
-  await Promise.all(
-    Array.from({ length: Math.min(poolSize, tasks.length) }, () => worker())
+  const activeWorkers = Array.from(
+    { length: Math.min(poolSize, tasks.length) },
+    (_, i) => worker(i + 1)
   );
+
+  await Promise.all(activeWorkers);
 }
 
 export async function runScan(
