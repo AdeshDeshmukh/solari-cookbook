@@ -2,6 +2,20 @@ import { Solari } from "@solarisdk/browser";
 import { extractPricing, resolvePricingUrl } from "./extractors";
 import { GeoCode, GEO_LABELS, ScanJob, ScanResult, ScanBenchmark } from "./types";
 
+export interface BrowserEgressConfig {
+  geo: GeoCode;
+  stealth: boolean;
+  recording: boolean;
+}
+
+export function buildBrowserLaunchOptions(config: BrowserEgressConfig) {
+  return {
+    stealth: config.stealth,
+    proxy: config.stealth ? config.geo : undefined,
+    recording: config.recording,
+  };
+}
+
 async function launchWithRetry(
   solari: Solari,
   geo: GeoCode,
@@ -11,20 +25,23 @@ async function launchWithRetry(
 
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
-      const browser = await solari.launch({
+      const launchOptions = buildBrowserLaunchOptions({
+        geo,
         stealth: useStealth,
-        proxy: useStealth ? geo : undefined,
         recording: true,
       });
+      const browser = await solari.launch(launchOptions);
       return browser;
     } catch (err: any) {
       const msg = err?.message || "";
 
+      // Fallback for non-stealth on account restrictions
       if (msg.includes("402") || msg.includes("requires a paid")) {
         useStealth = false;
         continue;
       }
 
+      // Exponential backoff for concurrency limit
       if (msg.includes("429") || msg.includes("Concurrent session")) {
         const delay = Math.pow(2, attempt) * 1500 + Math.random() * 500;
         await new Promise((r) => setTimeout(r, delay));
