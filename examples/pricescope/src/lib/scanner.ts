@@ -16,6 +16,27 @@ export function buildBrowserLaunchOptions(config: BrowserEgressConfig) {
   };
 }
 
+export function isTierRestrictionError(err: any): boolean {
+  const msg = (err?.message || "").toLowerCase();
+  return (
+    msg.includes("402") ||
+    msg.includes("requires a paid") ||
+    msg.includes("proxy not supported") ||
+    msg.includes("upgrade your plan") ||
+    msg.includes("tier restriction")
+  );
+}
+
+export function isRateLimitError(err: any): boolean {
+  const msg = (err?.message || "").toLowerCase();
+  return (
+    msg.includes("429") ||
+    msg.includes("concurrent session") ||
+    msg.includes("rate limit") ||
+    msg.includes("too many requests")
+  );
+}
+
 async function launchWithRetry(
   solari: Solari,
   geo: GeoCode,
@@ -33,17 +54,17 @@ async function launchWithRetry(
       const browser = await solari.launch(launchOptions);
       return browser;
     } catch (err: any) {
-      const msg = err?.message || "";
-
-      // Fallback for non-stealth on account restrictions
-      if (msg.includes("402") || msg.includes("requires a paid")) {
+      // Fallback for non-stealth on account tier restrictions
+      if (isTierRestrictionError(err)) {
+        console.warn(`[PriceScope] Account tier restriction encountered for geo ${geo}. Falling back to default cloud browser.`);
         useStealth = false;
         continue;
       }
 
       // Exponential backoff for concurrency limit
-      if (msg.includes("429") || msg.includes("Concurrent session")) {
-        const delay = Math.pow(2, attempt) * 1500 + Math.random() * 500;
+      if (isRateLimitError(err)) {
+        const delay = calculateBackoffDelay(attempt);
+        console.warn(`[PriceScope] Rate limit hit. Backing off for ${Math.round(delay)}ms (attempt ${attempt + 1}/${maxRetries}).`);
         await new Promise((r) => setTimeout(r, delay));
         continue;
       }
