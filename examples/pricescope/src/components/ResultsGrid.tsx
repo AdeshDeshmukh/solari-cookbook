@@ -209,7 +209,7 @@ function DiscrepancyTable({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
         <div>
           <h3 className="text-lg font-bold text-slate-100 flex items-center gap-2">
-            <span>💡 Cross-Geography Price Matrix</span>
+            <span>💡 Cross-Geography Price Discrepancy Matrix</span>
           </h3>
           <p className="text-xs text-slate-400 mt-0.5">
             Real-time pricing differences captured across residential egress endpoints.
@@ -239,19 +239,30 @@ function DiscrepancyTable({
           </thead>
           <tbody className="divide-y divide-slate-800/60 bg-slate-900/40">
             {products.map((product) => {
+              const usPrice = results.get(`${product}-us`)?.price;
+
               return (
                 <tr key={product} className="hover:bg-slate-800/30 transition-colors">
-                  <td className="py-3.5 px-4 font-semibold text-slate-200 capitalize">
-                    {product}
+                  <td className="py-3.5 px-4 font-semibold text-slate-200 capitalize flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-indigo-400"></span>
+                    <span>{product}</span>
                   </td>
                   {geos.map((geo) => {
                     const r = results.get(`${product}-${geo}`);
                     const price = r?.price ?? "—";
-                    const plan = r?.planName ? `${r.planName}: ` : "";
+                    const isDiscrepant = geo !== "us" && r?.currency && r.currency !== "USD";
+
                     return (
                       <td key={geo} className="py-3.5 px-4 text-center font-medium text-slate-300">
-                        <div className="font-semibold text-slate-100">{price}</div>
-                        {r?.planName && <div className="text-[10px] text-slate-500 font-mono uppercase">{r.planName}</div>}
+                        <div className="font-semibold text-slate-100 flex items-center justify-center gap-1">
+                          <span>{price}</span>
+                          {isDiscrepant && (
+                            <span className="text-[10px] text-amber-400 bg-amber-950/60 border border-amber-800/40 px-1 rounded font-mono">
+                              {r.currency}
+                            </span>
+                          )}
+                        </div>
+                        {r?.planName && <div className="text-[10px] text-slate-500 font-mono uppercase mt-0.5">{r.planName}</div>}
                       </td>
                     );
                   })}
